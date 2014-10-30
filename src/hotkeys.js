@@ -44,6 +44,12 @@
                     '</div></div>';
 
     /**
+     * Cheat sheet template url to bind external template instead
+     * @type {String}
+     */
+    this.templateUrl = this.defaultTemplateUrl = 'template/hotkeys-cheatsheet.html';
+
+    /**
      * Configurable setting for the cheat sheet hotkey
      * @type {String}
      */
@@ -55,7 +61,9 @@
      */
     this.cheatSheetDescription = 'Show / hide this help menu';
 
-    this.$get = function ($rootElement, $rootScope, $compile, $window, $document) {
+    this.$get = function ($rootElement, $rootScope, $compile, $window, $document, $q, $http, $templateCache) {
+
+      $templateCache.put(this.defaultTemplateUrl, this.template);
 
       // monkeypatch Mousetrap's stopCallback() function
       // this version doesn't return true when the element is an INPUT, SELECT, or TEXTAREA
@@ -216,15 +224,19 @@
       if (this.includeCheatSheet) {
         var document = $document[0];
         var element = $rootElement[0];
-        var helpMenu = angular.element(this.template);
+
+        $http.get(this.templateUrl, { cache: $templateCache }).then(function (result) {
+          var helpMenu = angular.element(result.data);
+
+          // If $rootElement is document or documentElement, then body must be used
+          if (element === document || element === document.documentElement) {
+            element = document.body;
+          }
+
+          angular.element(element).append($compile(helpMenu)(scope));
+        });
+
         _add(this.cheatSheetHotkey, this.cheatSheetDescription, toggleCheatSheet);
-
-        // If $rootElement is document or documentElement, then body must be used
-        if (element === document || element === document.documentElement) {
-          element = document.body;
-        }
-
-        angular.element(element).append($compile(helpMenu)(scope));
       }
 
 
@@ -262,7 +274,7 @@
           // Here's an odd way to do this: we're going to use the original
           // description of the hotkey on the cheat sheet so that it shows up.
           // without it, no entry for esc will ever show up (#22)
-          _add('esc', previousEsc.description, toggleCheatSheet, null, ['INPUT', 'SELECT', 'TEXTAREA'])
+          _add('esc', previousEsc.description, toggleCheatSheet, null, ['INPUT', 'SELECT', 'TEXTAREA']);
         } else {
           _del('esc');
 
@@ -512,6 +524,7 @@
         get                   : _get,
         bindTo                : bindTo,
         template              : this.template,
+        templateUrl           : this.templateUrl,
         toggleCheatSheet      : toggleCheatSheet,
         includeCheatSheet     : this.includeCheatSheet,
         cheatSheetHotkey      : this.cheatSheetHotkey,
