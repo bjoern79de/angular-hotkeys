@@ -1,3 +1,9 @@
+/*! 
+ * angular-hotkeys v1.4.5
+ * https://chieffancypants.github.io/angular-hotkeys
+ * Copyright (c) 2014 Wes Cruver
+ * License: MIT
+ */
 /*
  * angular-hotkeys
  *
@@ -30,18 +36,26 @@
      * Cheat sheet template in the event you want to totally customize it.
      * @type {String}
      */
-    this.template = '<div class="cfp-hotkeys-container fade" ng-class="{in: helpVisible}" style="display: none;"><div class="cfp-hotkeys">' +
-                      '<h4 class="cfp-hotkeys-title">{{ title }}</h4>' +
-                      '<table><tbody>' +
-                        '<tr ng-repeat="hotkey in hotkeys | filter:{ description: \'!$$undefined$$\' }">' +
-                          '<td class="cfp-hotkeys-keys">' +
-                            '<span ng-repeat="key in hotkey.format() track by $index" class="cfp-hotkeys-key">{{ key }}</span>' +
-                          '</td>' +
-                          '<td class="cfp-hotkeys-text">{{ hotkey.description }}</td>' +
-                        '</tr>' +
-                      '</tbody></table>' +
-                      '<div class="cfp-hotkeys-close" ng-click="toggleCheatSheet()">×</div>' +
-                    '</div></div>';
+    this.template = '<div class="modal-header"><h4>{{ title }}</h4></div>' +
+    '<div class="modal-body">' +
+        '<table><tbody>' +
+            '<tr ng-repeat="hotkey in hotkeys | filter:{ description: \'!$$undefined$$\' }">' +
+                '<td class="cfp-hotkeys-keys">' +
+                    '<span ng-repeat="key in hotkey.format() track by $index" class="btn btn-xs btn-default">{{ key }}</span>' +
+                '</td>' +
+                '<td class="cfp-hotkeys-text">{{ hotkey.description }}</td>' +
+            '</tr>' +
+        '</tbody></table>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+        '<button class="btn btn-primary center-block" ng-click="ok()">OK</button>' +
+    '</div>';
+
+    /**
+     * Cheat sheet template url
+     * @type {String}
+     */
+    this.templateUrl = null;
 
     /**
      * Configurable setting for the cheat sheet hotkey
@@ -55,7 +69,7 @@
      */
     this.cheatSheetDescription = 'Show / hide this help menu';
 
-    this.$get = function ($rootElement, $rootScope, $compile, $window, $document) {
+    this.$get = function ($rootElement, $rootScope, $compile, $window, $document, $q, $http, $templateCache, $modal) {
 
       // monkeypatch Mousetrap's stopCallback() function
       // this version doesn't return true when the element is an INPUT, SELECT, or TEXTAREA
@@ -213,19 +227,10 @@
 
 
       // Auto-create a help menu:
-      if (this.includeCheatSheet) {
-        var document = $document[0];
-        var element = $rootElement[0];
-        var helpMenu = angular.element(this.template);
+      if (this.includeCheatSheet && this.templateUrl !== null) {
         _add(this.cheatSheetHotkey, this.cheatSheetDescription, toggleCheatSheet);
-
-        // If $rootElement is document or documentElement, then body must be used
-        if (element === document || element === document.documentElement) {
-          element = document.body;
         }
 
-        angular.element(element).append($compile(helpMenu)(scope));
-      }
 
 
       /**
@@ -244,34 +249,45 @@
         }
       }
 
+      var modalInstance = null;
+      var modalCtrl = function ($scope, $modalInstance) {
+        modalInstance = $modalInstance;
+        $scope.title = scope.title;
+        $scope.hotkeys = scope.hotkeys;
+        $scope.ok = function() {
+          scope.helpVisible = false;
+          $modalInstance.close();
+          _del('esc');
+        };
+        _add('esc', this.cheatSheetDescription, $scope.ok);
+      };
+
+      var modalOptions = {
+        size: 'lg',
+        backdrop: 'static',
+        keyboard: false,
+        controller: modalCtrl
+      };
+
+      if (this.templateUrl === null && this.template !== null) {
+        modalOptions.template = this.template;
+      } else if (this.templateUrl !== null) {
+        modalOptions.templateUrl = this.templateUrl;
+      }
+
       /**
        * Toggles the help menu element's visiblity
        */
-      var previousEsc = false;
-
       function toggleCheatSheet() {
         scope.helpVisible = !scope.helpVisible;
 
-        // Bind to esc to remove the cheat sheet.  Ideally, this would be done
-        // as a directive in the template, but that would create a nasty
-        // circular dependency issue that I don't feel like sorting out.
         if (scope.helpVisible) {
-          previousEsc = _get('esc');
-          _del('esc');
-
-          // Here's an odd way to do this: we're going to use the original
-          // description of the hotkey on the cheat sheet so that it shows up.
-          // without it, no entry for esc will ever show up (#22)
-          _add('esc', previousEsc.description, toggleCheatSheet, null, ['INPUT', 'SELECT', 'TEXTAREA'])
+          var modal = $modal.open(modalOptions);
         } else {
+          modalInstance.close();
           _del('esc');
-
-          // restore the previously bound ESC key
-          if (previousEsc !== false) {
-            _add(previousEsc);
-          }
         }
-      }
+        }
 
       /**
        * Creates a new Hotkey and creates the Mousetrap binding
@@ -512,6 +528,7 @@
         get                   : _get,
         bindTo                : bindTo,
         template              : this.template,
+        templateUrl           : this.templateUrl,
         toggleCheatSheet      : toggleCheatSheet,
         includeCheatSheet     : this.includeCheatSheet,
         cheatSheetHotkey      : this.cheatSheetHotkey,
